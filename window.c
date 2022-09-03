@@ -494,9 +494,10 @@ void win_draw_bar_at(win_t *win, win_bar_t *l, win_bar_t *r, int barx, int barw,
 						len--;
 						newstr = l->buf + (len * sizeof(char));
 					}
-					win_bar_t * x;
-					x->buf = newstr;
-					win_draw_bar_at(win, x, NULL, barx, barw, bary+barh, barh, true);
+					win_bar_t xbt1;
+					win_bar_t * xbt = &xbt1;
+					xbt->buf = newstr;
+					win_draw_bar_at(win, xbt, NULL, barx, barw, bary+barh, barh, true);
 				}
 				//win_draw_bar_at(win, l, r, barx, barw, bary+barh, barh, false);
 				//win_draw_text_font(win, d, &win->bg, x, y, l->buf, len, w, fu);
