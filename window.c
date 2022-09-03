@@ -51,7 +51,29 @@ static int fontheight;
 static double fontsize;
 static int barheight;
 
+static XftFont *li_font;
+static int li_fontheight;
+static double li_fontsize;
+static int li_barheight;
+
+
 Atom atoms[ATOM_COUNT];
+
+void win_clone_to_root(win_t *win){
+	win_env_t *e;
+	e = &win->env;
+//try:
+//RootWindow(e->dpy, e->scr);
+
+//	win_t win = *winp;
+//--test bg
+	Window tswroot, tswparent;
+	Window * tswchildren;
+	unsigned int tswnchildren;
+	XQueryTree(e->dpy, win->xwin, &tswroot, &tswparent, &tswchildren, &tswnchildren);
+	XSetWindowBackgroundPixmap(e->dpy, tswroot, win->buf.pm);
+//++test bg
+}
 
 void win_init_font(const win_env_t *e, const char *fontstr)
 {
@@ -60,6 +82,15 @@ void win_init_font(const win_env_t *e, const char *fontstr)
 	fontheight = font->ascent + font->descent;
 	FcPatternGetDouble(font->pattern, FC_SIZE, 0, &fontsize);
 	barheight = fontheight + 2 * V_TEXT_PAD;
+}
+
+void win_init_font_li(const win_env_t *e, const char *fontstr)
+{
+	if ((li_font = XftFontOpenName(e->dpy, e->scr, fontstr)) == NULL)
+		error(EXIT_FAILURE, 0, "Error loading font '%s'", fontstr);
+	li_fontheight = li_font->ascent + li_font->descent;
+	FcPatternGetDouble(li_font->pattern, FC_SIZE, 0, &li_fontsize);
+	li_barheight = li_fontheight + 2 * V_TEXT_PAD;
 }
 
 void win_alloc_color(const win_env_t *e, const char *name, XftColor *col)
@@ -92,7 +123,7 @@ const char* win_res(XrmDatabase db, const char *name, const char *def)
 void win_init(win_t *win)
 {
 	win_env_t *e;
-	const char *bg, *fg, *f;
+	const char *bg, *fg, *f, *f2;
 	char *res_man;
 	XrmDatabase db;
 
@@ -117,7 +148,9 @@ void win_init(win_t *win)
 	db = res_man != NULL ? XrmGetStringDatabase(res_man) : None;
 
 	f = win_res(db, RES_CLASS ".font", "monospace-8");
+	f2 = win_res(db, RES_CLASS ".font-title", "monospace-20");
 	win_init_font(e, f);
+	win_init_font_li(e, f2);
 
 	bg = win_res(db, RES_CLASS ".background", "white");
 	fg = win_res(db, RES_CLASS ".foreground", "black");
@@ -347,8 +380,12 @@ void win_clear(win_t *win)
 #define TEXTWIDTH(win, text, len) \
 	win_draw_text(win, NULL, NULL, 0, 0, text, len, 0)
 
-int win_draw_text(win_t *win, XftDraw *d, const XftColor *color, int x, int y,
-                  char *text, int len, int w)
+#define TEXTWIDTHF(win, text, len, fnt) \
+	win_draw_text_font(win, NULL, NULL, 0, 0, text, len, 0, fnt)
+
+
+int win_draw_text_font(win_t *win, XftDraw *d, const XftColor *color, int x, int y,
+                  char *text, int len, int w, XftFont *fin)
 {
 	int err, tw = 0;
 	char *t, *next;
@@ -359,8 +396,8 @@ int win_draw_text(win_t *win, XftDraw *d, const XftColor *color, int x, int y,
 
 	for (t = text; t - text < len; t = next) {
 		next = utf8_decode(t, &rune, &err);
-		if (XftCharExists(win->env.dpy, font, rune)) {
-			f = font;
+		if (XftCharExists(win->env.dpy, fin, rune)) {
+			f = fin;
 		} else { /* fallback font */
 			fccharset = FcCharSetCreate();
 			FcCharSetAddChar(fccharset, rune);
@@ -375,45 +412,95 @@ int win_draw_text(win_t *win, XftDraw *d, const XftColor *color, int x, int y,
 			XftDrawStringUtf8(d, color, f, x, y, (XftChar8*)t, next - t);
 			x += ext.xOff;
 		}
-		if (f != font)
+		if (f != fin)
 			XftFontClose(win->env.dpy, f);
 	}
 	return tw;
 }
 
+int win_draw_text(win_t *win, XftDraw *d, const XftColor *color, int x, int y,
+                  char *text, int len, int w)
+{
+	return win_draw_text_font(win,d,color,x,y,text,len,w,font);
+}
+
 void win_draw_bar(win_t *win)
 {
-	int len, x, y, w, tw;
-	win_env_t *e;
 	win_bar_t *l, *r;
-	XftDraw *d;
 
 	if ((l = &win->bar.l)->buf == NULL || (r = &win->bar.r)->buf == NULL)
 		return;
+	//default:
+	win_draw_bar_at(win,l,r,0,win->w,win->h,win->bar.h,false);
+	//alt:
+	//border:
+	//win_draw_bar_at(win, l,r,10, win->w-20, win->h-10, win->bar.h);
+	//center right:
+	//win_draw_bar_at(win,l, r, (win->w/2), (win->w/2)-10, (win->h/2)-(win->bar.h/2), win->bar.h);
+
+	//split:
+	//win_draw_bar_at(win,l,NULL,0,win->w,win->h,win->bar.h);
+	//win_draw_bar_at(win,NULL, r, (win->w/2), (win->w/2)-10, (win->h/2)-(win->bar.h/2), win->bar.h);
+
+}
+
+void win_draw_bar_at(win_t *win, win_bar_t *l, win_bar_t *r, int barx, int barw, int bary, int barh, bool thumb)
+{
+	int len, x, y, w, tw;
+	win_env_t *e;
+	XftDraw *d;
+	XftFont *fu;
+//new: use win_draw_text_font (selected font last param)
 
 	e = &win->env;
-	y = win->h + font->ascent + V_TEXT_PAD;
-	w = win->w - 2*H_TEXT_PAD;
+	if (thumb){
+		fu=li_font;
+		barh=li_barheight;
+		//fu=font;
+	} else {
+		fu=font;
+	}
+	y = bary + fu->ascent + V_TEXT_PAD;
+	w = barw - 2*H_TEXT_PAD;
 	d = XftDrawCreate(e->dpy, win->buf.pm, DefaultVisual(e->dpy, e->scr),
 	                  DefaultColormap(e->dpy, e->scr));
 
 	XSetForeground(e->dpy, gc, win->fg.pixel);
-	XFillRectangle(e->dpy, win->buf.pm, gc, 0, win->h, win->w, win->bar.h);
+	XFillRectangle(e->dpy, win->buf.pm, gc, barx, bary, barw, barh);
 
 	XSetForeground(e->dpy, gc, win->bg.pixel);
 	XSetBackground(e->dpy, gc, win->fg.pixel);
 
-	if ((len = strlen(r->buf)) > 0) {
-		if ((tw = TEXTWIDTH(win, r->buf, len)) > w)
-			return;
-		x = win->w - tw - H_TEXT_PAD;
-		w -= tw;
-		win_draw_text(win, d, &win->bg, x, y, r->buf, len, tw);
+	if(r != NULL){
+		if ((len = strlen(r->buf)) > 0) {
+			if ((tw = TEXTWIDTHF(win, r->buf, len, fu)) > w)
+				return;
+			x = barw + barx - tw - H_TEXT_PAD;
+			w -= tw;
+			win_draw_text_font(win, d, &win->bg, x, y+barh, r->buf, len, tw, fu);
+		}
 	}
-	if ((len = strlen(l->buf)) > 0) {
-		x = H_TEXT_PAD;
-		w -= 2 * H_TEXT_PAD; /* gap between left and right parts */
-		win_draw_text(win, d, &win->bg, x, y, l->buf, len, w);
+	if(l != NULL){
+		if ((len = strlen(l->buf)) > 0) {
+			x = barx + H_TEXT_PAD;
+			w -= 2 * H_TEXT_PAD; /* gap between left and right parts */
+			win_draw_text_font(win, d, &win->bg, x, y, l->buf, len, w, fu);
+			if ((tw = TEXTWIDTHF(win, l->buf, len, fu)) > w) //test
+				if(thumb){
+					//win_draw_bar_at(win, l, NULL, barx, barw, bary+barh, barh, false);
+					char * newstr;
+					//newstr = l->buf + (len * sizeof(char));
+					while(TEXTWIDTHF(win, l->buf, len, fu)>w){
+						len--;
+						newstr = l->buf + (len * sizeof(char));
+					}
+					win_bar_t * x;
+					x->buf = newstr;
+					win_draw_bar_at(win, x, NULL, barx, barw, bary+barh, barh, true);
+				}
+				//win_draw_bar_at(win, l, r, barx, barw, bary+barh, barh, false);
+				//win_draw_text_font(win, d, &win->bg, x, y, l->buf, len, w, fu);
+		}
 	}
 	XftDrawDestroy(d);
 }

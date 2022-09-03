@@ -69,7 +69,7 @@ bool cg_switch_mode(arg_t _)
 {
 	if (mode == MODE_IMAGE) {
 		if (tns.thumbs == NULL)
-			tns_init(&tns, files, &filecnt, &fileidx, &win);
+			tns_init(&tns, files, &filecnt, &fileidx, &win, &mode);
 		img_close(&img, false);
 		reset_timeout(reset_cursor);
 		if (img.ss.on) {
@@ -78,9 +78,36 @@ bool cg_switch_mode(arg_t _)
 		}
 		tns.dirty = true;
 		mode = MODE_THUMB;
+	} else if (mode == MODE_THUMB){
+		load_image(fileidx);
+		mode = MODE_IMAGE;
 	} else {
 		load_image(fileidx);
 		mode = MODE_IMAGE;
+	}
+	return true;
+}
+bool cg_switch_mode_to(arg_t newmode)
+{
+	if (mode == MODE_IMAGE) {
+		if (tns.thumbs == NULL)
+			tns_init(&tns, files, &filecnt, &fileidx, &win, &mode);
+		img_close(&img, false);
+		reset_timeout(reset_cursor);
+		if (img.ss.on) {
+			img.ss.on = false;
+			reset_timeout(slideshow);
+		}
+		tns.dirty = true;
+		mode = newmode;
+	} else if (newmode == MODE_IMAGE) {
+		load_image(fileidx);
+		mode = MODE_IMAGE;
+	} else {
+		if (tns.thumbs == NULL)
+			tns_init(&tns, files, &filecnt, &fileidx, &win, &mode);
+		tns.dirty = true;
+		mode=newmode;
 	}
 	return true;
 }
@@ -147,7 +174,7 @@ bool cg_first(arg_t _)
 	if (mode == MODE_IMAGE && fileidx != 0) {
 		load_image(0);
 		return true;
-	} else if (mode == MODE_THUMB && fileidx != 0) {
+	} else if (isthumbmode(mode) && fileidx != 0) {
 		fileidx = 0;
 		tns.dirty = true;
 		return true;
@@ -163,7 +190,7 @@ bool cg_n_or_last(arg_t _)
 	if (mode == MODE_IMAGE && fileidx != n) {
 		load_image(n);
 		return true;
-	} else if (mode == MODE_THUMB && fileidx != n) {
+	} else if (isthumbmode(mode) && fileidx != n) {
 		fileidx = n;
 		tns.dirty = true;
 		return true;
@@ -182,7 +209,7 @@ bool cg_scroll_screen(arg_t dir)
 
 bool cg_zoom(arg_t d)
 {
-	if (mode == MODE_THUMB)
+	if (isthumbmode(mode))
 		return tns_zoom(&tns, d);
 	else if (d > 0)
 		return img_zoom_in(&img);
@@ -197,6 +224,12 @@ bool cg_toggle_image_mark(arg_t _)
 	return mark_image(fileidx, !(files[fileidx].flags & FF_MARK));
 }
 
+bool cg_markselquit(arg_t _)
+{
+	mark_image(fileidx, true);
+	return cg_quit(_);
+}
+
 bool cg_reverse_marks(arg_t _)
 {
 	int i;
@@ -205,7 +238,7 @@ bool cg_reverse_marks(arg_t _)
 		files[i].flags ^= FF_MARK;
 		markcnt += files[i].flags & FF_MARK ? 1 : -1;
 	}
-	if (mode == MODE_THUMB)
+	if (isthumbmode(mode))
 		tns.dirty = true;
 	return true;
 }
@@ -227,7 +260,7 @@ bool cg_unmark_all(arg_t _)
 	for (i = 0; i < filecnt; i++)
 		files[i].flags &= ~FF_MARK;
 	markcnt = 0;
-	if (mode == MODE_THUMB)
+	if (isthumbmode(mode))
 		tns.dirty = true;
 	return true;
 }
@@ -262,7 +295,7 @@ bool cg_navigate_marked(arg_t n)
 bool cg_change_gamma(arg_t d)
 {
 	if (img_change_gamma(&img, d * (prefix > 0 ? prefix : 1))) {
-		if (mode == MODE_THUMB)
+		if (isthumbmode(mode))
 			tns.dirty = true;
 		return true;
 	} else {
@@ -436,18 +469,33 @@ bool ct_move_sel(arg_t dir)
 bool ct_reload_all(arg_t _)
 {
 	tns_free(&tns);
-	tns_init(&tns, files, &filecnt, &fileidx, &win);
+	tns_init(&tns, files, &filecnt, &fileidx, &win, &mode);
 	tns.dirty = true;
 	return true;
 }
 
+bool cl_move_sel(arg_t dir)
+{
+	return tns_move_selection(&tns, dir, prefix);
+}
+
+bool cl_reload_all(arg_t _)
+{
+	tns_free(&tns);
+	tns_init(&tns, files, &filecnt, &fileidx, &win, &mode);
+	tns.dirty = true;
+	return true;
+}
 
 #undef  G_CMD
-#define G_CMD(c) { -1, cg_##c },
+#define G_CMD(c) { MODE_LIST, cg_##c },{ MODE_THUMB, cg_##c },{ MODE_IMAGE, cg_##c },{ -1, cg_##c },
 #undef  I_CMD
 #define I_CMD(c) { MODE_IMAGE, ci_##c },
 #undef  T_CMD
 #define T_CMD(c) { MODE_THUMB, ct_##c },
+#undef  L_CMD
+#define L_CMD(c) { MODE_LIST, cl_##c },
+
 
 const cmd_t cmds[CMD_COUNT] = {
 #include "commands.lst"

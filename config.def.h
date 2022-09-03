@@ -56,11 +56,24 @@ static const int THUMB_SIZE = 3;
 #endif
 #ifdef _MAPPINGS_CONFIG
 
-/* keyboard mappings for image and thumbnail mode: */
+/* keyboard mappings for image and thumbnail mode:
++ for list mode
+tg,lg and ig are available to use instead of g_.
+You can set global functions to an individual key bind for each mode.
+g_ functions will overwrite later listed individual options
+*/
 static const keymap_t keys[] = {
 	/* modifiers    key               function              argument */
-	{ 0,            XK_q,             g_quit,               None },
-	{ 0,            XK_Return,        g_switch_mode,        None },
+	{ 0,            XK_q,             tg_quit,	        None },
+	{ 0,            XK_q,             ig_quit,              None },
+	{ 0,            XK_q,             lg_quit,              None },
+	{ 0,		XK_Return,        tg_switch_mode_to,       MODE_IMAGE },
+	{ 0,		XK_Return,        ig_switch_mode_to,       MODE_THUMB },
+	{ ControlMask,  XK_Return,        lg_switch_mode_to,       MODE_IMAGE },
+	{ ControlMask,  XK_Return,        ig_switch_mode_to,       MODE_LIST },
+	{ ControlMask,  XK_Return,        tg_switch_mode_to,       MODE_LIST },
+	{ 0,            XK_Return,        ig_switch_mode,       None },
+	{ 0,            XK_Return,        lg_markselquit,	None },
 	{ 0,            XK_f,             g_toggle_fullscreen,  None },
 	{ 0,            XK_b,             g_toggle_bar,         None },
 	{ ControlMask,  XK_x,             g_prefix_external,    None },
@@ -99,6 +112,18 @@ static const keymap_t keys[] = {
 	{ 0,            XK_l,             t_move_sel,           DIR_RIGHT },
 	{ 0,            XK_Right,         t_move_sel,           DIR_RIGHT },
 	{ 0,            XK_R,             t_reload_all,         None },
+
+	{ 0,            XK_h,             l_move_sel,           DIR_LEFT },
+	{ 0,            XK_Left,          l_move_sel,           DIR_LEFT },
+	{ 0,            XK_j,             l_move_sel,           DIR_DOWN },
+	{ 0,            XK_Down,          l_move_sel,           DIR_DOWN },
+	{ 0,            XK_k,             l_move_sel,           DIR_UP },
+	{ 0,            XK_Up,            l_move_sel,           DIR_UP },
+	{ 0,            XK_l,             l_move_sel,           DIR_RIGHT },
+	{ 0,            XK_Right,         l_move_sel,           DIR_RIGHT },
+	{ 0,            XK_R,             l_reload_all,         None },
+	{ 0,            XK_space,         lg_toggle_image_mark, None },
+
 
 	{ 0,            XK_n,             i_navigate,           +1 },
 	{ 0,            XK_n,             i_scroll_to_edge,     DIR_LEFT | DIR_UP },

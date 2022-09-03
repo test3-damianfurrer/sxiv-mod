@@ -36,6 +36,10 @@ Imlib_Image img_open(const fileinfo_t*);
 
 static char *cache_dir;
 
+//tst font
+
+//tst font
+
 char* tns_cache_filepath(const char *filepath)
 {
 	size_t len;
@@ -144,7 +148,7 @@ void tns_clean_cache(tns_t *tns)
 
 
 void tns_init(tns_t *tns, fileinfo_t *files, const int *cnt, int *sel,
-              win_t *win)
+              win_t *win, appmode_t *mode)
 {
 	int len;
 	const char *homedir, *dsuffix = "";
@@ -155,6 +159,8 @@ void tns_init(tns_t *tns, fileinfo_t *files, const int *cnt, int *sel,
 	} else {
 		tns->thumbs = NULL;
 	}
+	tns->mode=mode;
+
 	tns->files = files;
 	tns->cnt = cnt;
 	tns->initnext = tns->loadnext = 0;
@@ -415,6 +421,8 @@ void tns_render(tns_t *tns)
 	imlib_context_set_drawable(win->buf.pm);
 
 	tns->cols = MAX(1, win->w / tns->dim);
+	if (*tns->mode == MODE_LIST)
+		tns->cols = 1;
 	tns->rows = MAX(1, win->h / tns->dim);
 
 	if (*tns->cnt < tns->cols * tns->rows) {
@@ -430,6 +438,8 @@ void tns_render(tns_t *tns)
 	}
 	r = cnt % tns->cols ? 1 : 0;
 	tns->x = x = (win->w - MIN(cnt, tns->cols) * tns->dim) / 2 + tns->bw + 3;
+	if (*tns->mode == MODE_LIST)
+		tns->x = x = tns->bw;
 	tns->y = y = (win->h - (cnt / tns->cols + r) * tns->dim) / 2 + tns->bw + 3;
 	tns->loadnext = *tns->cnt;
 	tns->end = tns->first + cnt;
@@ -448,6 +458,20 @@ void tns_render(tns_t *tns)
 			t->y = y + (thumb_sizes[tns->zl] - t->h) / 2;
 			imlib_context_set_image(t->im);
 			imlib_render_image_on_drawable_at_size(t->x, t->y, t->w, t->h);
+
+			if (*tns->mode == MODE_LIST){
+				win_bar_t *l = &win->bar.l;
+				fileinfo_t inf=tns->files[i];
+				char * posptr;
+				if((posptr = strrchr(inf.name, '/')) != NULL){
+					posptr = posptr + sizeof(char);
+					strncpy(l->buf, posptr, l->size);
+				}else{
+					strncpy(l->buf, inf.name, l->size);
+				}
+				win_draw_bar_at(win,l,NULL,x+thumb_sizes[tns->zl]+10,win->w-x-thumb_sizes[tns->zl]-10,t->y,20,true);
+			}
+
 			if (tns->files[i].flags & FF_MARK)
 				tns_mark(tns, i, true);
 		} else {

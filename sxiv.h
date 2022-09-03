@@ -64,7 +64,8 @@ typedef enum {
 
 typedef enum {
 	MODE_IMAGE,
-	MODE_THUMB
+	MODE_THUMB,
+	MODE_LIST
 } appmode_t;
 
 typedef enum {
@@ -155,12 +156,14 @@ bool arl_handle(arl_t*);
 
 /* commands.c */
 
+bool isthumbmode(appmode_t); //in main
 typedef int arg_t;
 typedef bool (*cmd_f)(arg_t);
 
-#define G_CMD(c) g_##c,
+#define G_CMD(c) lg_##c, tg_##c, ig_##c, g_##c,
 #define I_CMD(c) i_##c,
 #define T_CMD(c) t_##c,
+#define L_CMD(c) l_##c,
 
 typedef enum {
 #include "commands.lst"
@@ -285,6 +288,8 @@ struct opt {
 	bool thumb_mode;
 	bool clean_cache;
 	bool private_mode;
+	bool mark_single;
+	bool list_mode;
 };
 
 extern const opt_t *options;
@@ -324,10 +329,11 @@ struct tns {
 	int dim;
 
 	bool dirty;
+	appmode_t *mode;
 };
 
 void tns_clean_cache(tns_t*);
-void tns_init(tns_t*, fileinfo_t*, const int*, int*, win_t*);
+void tns_init(tns_t*, fileinfo_t*, const int*, int*, win_t*, appmode_t*);
 CLEANUP void tns_free(tns_t*);
 bool tns_load(tns_t*, int, bool, bool);
 void tns_unload(tns_t*, int);
@@ -443,6 +449,7 @@ void win_draw_rect(win_t*, int, int, int, int, bool, int, unsigned long);
 void win_set_title(win_t*, const char*);
 void win_set_cursor(win_t*, cursor_t);
 void win_cursor_pos(win_t*, int*, int*);
+void win_draw_bar_at(win_t *, win_bar_t *, win_bar_t *, int , int , int , int , bool );
 
 #endif /* SXIV_H */
 

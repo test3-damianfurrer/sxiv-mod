@@ -46,6 +46,7 @@ void reset_cursor(void);
 void animate(void);
 void slideshow(void);
 void clear_resize(void);
+void unmarkall(void);
 
 appmode_t mode;
 arl_t arl;
@@ -61,6 +62,7 @@ int markidx;
 
 int prefix;
 bool extprefix;
+bool onemark;
 
 bool resized = false;
 
@@ -323,15 +325,18 @@ void load_image(int new)
 
 bool mark_image(int n, bool on)
 {
+	bool updated=false;
 	markidx = n;
+	if(on==true && onemark==true)
+		unmarkall();
 	if (!!(files[n].flags & FF_MARK) != on) {
 		files[n].flags ^= FF_MARK;
 		markcnt += on ? 1 : -1;
-		if (mode == MODE_THUMB)
+		if(isthumbmode(mode))
 			tns_mark(&tns, n, on);
-		return true;
+		updated=true;
 	}
-	return false;
+	return updated;
 }
 
 void bar_put(win_bar_t *bar, const char *fmt, ...)
@@ -360,7 +365,7 @@ void update_info(void)
 	mark = files[fileidx].flags & FF_MARK ? "* " : "";
 	l->p = l->buf;
 	r->p = r->buf;
-	if (mode == MODE_THUMB) {
+	if (isthumbmode(mode)) {
 		if (tns.loadnext < tns.end)
 			bar_put(l, "Loading... %0*d", fw, tns.loadnext + 1);
 		else if (tns.initnext < filecnt)
@@ -472,7 +477,7 @@ void run_key_handler(const char *key, unsigned int mask)
 {
 	pid_t pid;
 	FILE *pfs;
-	bool marked = mode == MODE_THUMB && markcnt > 0;
+	bool marked = isthumbmode(mode) && markcnt > 0;
 	bool changed = false;
 	int f, i, pfd[2];
 	int fcnt = marked ? markcnt : 1;
@@ -601,10 +606,13 @@ void on_keypress(XKeyEvent *kev)
 		    keys[i].cmd >= 0 && keys[i].cmd < CMD_COUNT &&
 		    (cmds[keys[i].cmd].mode < 0 || cmds[keys[i].cmd].mode == mode))
 		{
-			if (cmds[keys[i].cmd].func(keys[i].arg))
+			if (cmds[keys[i].cmd].func(keys[i].arg)){
 				dirty = true;
+				break; //else the action for the new mode gets execd immediatly on mode switch
+			}
 		}
 	}
+
 	if (dirty)
 		redraw();
 	prefix = 0;
@@ -693,8 +701,8 @@ void run(void)
 
 	while (true) {
 		to_set = check_timeouts(&timeout);
-		init_thumb = mode == MODE_THUMB && tns.initnext < filecnt;
-		load_thumb = mode == MODE_THUMB && tns.loadnext < tns.end;
+		init_thumb = isthumbmode(mode) && tns.initnext < filecnt;
+		load_thumb = isthumbmode(mode) && tns.loadnext < tns.end;
 
 		if ((init_thumb || load_thumb || to_set || info.fd != -1 ||
 			   arl.fd != -1) && XPending(win.env.dpy) == 0)
@@ -817,6 +825,24 @@ void setup_signal(int sig, void (*handler)(int sig))
 		error(EXIT_FAILURE, errno, "signal %d", sig);
 }
 
+void unmarkall(){
+	if (markcnt > 0) {
+                for (int i = 0; i < filecnt; i++) {
+                        if (files[i].flags & FF_MARK)
+                                mark_image(i, false);
+                }
+        }
+
+}
+
+bool isthumbmode(appmode_t m){
+	if(m == MODE_THUMB)
+		return true;
+	if(m == MODE_LIST)
+		return true;
+	return false;
+}
+
 int main(int argc, char **argv)
 {
 	int i, start;
@@ -835,7 +861,7 @@ int main(int argc, char **argv)
 	parse_options(argc, argv);
 
 	if (options->clean_cache) {
-		tns_init(&tns, NULL, NULL, NULL, NULL);
+		tns_init(&tns, NULL, NULL, NULL, NULL, NULL);
 		tns_clean_cache(&tns);
 		exit(EXIT_SUCCESS);
 	}
@@ -928,9 +954,13 @@ int main(int argc, char **argv)
 	}
 	info.fd = -1;
 
+        if (options->mark_single) {
+		onemark=true;
+	}
+
 	if (options->thumb_mode) {
 		mode = MODE_THUMB;
-		tns_init(&tns, files, &filecnt, &fileidx, &win);
+		tns_init(&tns, files, &filecnt, &fileidx, &win, &mode);
 		while (!tns_load(&tns, fileidx, false, false))
 			remove_file(fileidx, false);
 	} else {
@@ -938,6 +968,14 @@ int main(int argc, char **argv)
 		tns.thumbs = NULL;
 		load_image(fileidx);
 	}
+
+        if (options->list_mode){
+		mode = MODE_LIST;
+		tns_init(&tns, files, &filecnt, &fileidx, &win, &mode);
+		while (!tns_load(&tns, fileidx, false, false))
+			remove_file(fileidx, false);
+	}
+
 	win_open(&win);
 	win_set_cursor(&win, CURSOR_WATCH);
 

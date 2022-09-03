@@ -30,7 +30,7 @@ const opt_t *options = (const opt_t*) &_options;
 
 void print_usage(void)
 {
-	printf("usage: sxiv [-abcfhiopqrtvZ] [-A FRAMERATE] [-e WID] [-G GAMMA] "
+	printf("usage: sxiv [-abcfhiopqrtl1vZ] [-A FRAMERATE] [-e WID] [-G GAMMA] "
 	       "[-g GEOMETRY] [-N NAME] [-n NUM] [-S DELAY] [-s MODE] [-z ZOOM] "
 	       "FILES...\n");
 }
@@ -72,7 +72,7 @@ void parse_options(int argc, char **argv)
 	_options.clean_cache = false;
 	_options.private_mode = false;
 
-	while ((opt = getopt(argc, argv, "A:abce:fG:g:hin:N:opqrS:s:tvZz:")) != -1) {
+	while ((opt = getopt(argc, argv, "A:abce:fG:g:hin:N:opqrS:s:tl1vZz:")) != -1) {
 		switch (opt) {
 			case '?':
 				print_usage();
@@ -88,6 +88,8 @@ void parse_options(int argc, char **argv)
 				break;
 			case 'b':
 				_options.hide_bar = true;
+				if(_options.list_mode == true)
+					_options.hide_bar = false; //test
 				break;
 			case 'c':
 				_options.clean_cache = true;
@@ -151,6 +153,13 @@ void parse_options(int argc, char **argv)
 				break;
 			case 't':
 				_options.thumb_mode = true;
+				break;
+			case 'l':
+				_options.list_mode = true;
+				_options.hide_bar = !_options.hide_bar; //test
+				break;
+			case '1':
+				_options.mark_single = true;
 				break;
 			case 'v':
 				print_version();
